@@ -26,7 +26,7 @@ sudo docker --version
 
 echo "Nomad Install Beginning..."
 # For now we use a static version. Set to the latest tested version you want here.
-NOMAD_VERSION=0.9.5
+NOMAD_VERSION=$(curl -s https://checkpoint-api.hashicorp.com/v1/check/nomad | jq -r ".current_version")
 cd /tmp/
 sudo curl -sSL https://releases.hashicorp.com/nomad/${NOMAD_VERSION}/nomad_${NOMAD_VERSION}_linux_amd64.zip -o nomad.zip
 if [ ! -d nomad ]; then
@@ -41,7 +41,7 @@ fi
 sudo mv /tmp/nomad /tmp/archive/nomad
 sudo mkdir -p /etc/nomad.d
 sudo chmod a+w /etc/nomad.d
-sudo cp /vagrant/nomad-config/nomad-server-west.hcl /etc/nomad.d/
+sudo cp /vagrant/nomad-config/nomad-server-east.hcl /etc/nomad.d/
 
 echo "Consul Install Beginning..."
 # Uncommend the first and comment the second line to get the latest edition
@@ -61,7 +61,7 @@ fi
 sudo mv /tmp/consul /tmp/archive/consul
 sudo mkdir -p /etc/consul.d
 sudo chmod a+w /etc/consul.d
-sudo cp /vagrant/consul-config/consul-server-west.hcl /etc/consul.d/
+sudo cp /vagrant/consul-config/consul-server-east.hcl /etc/consul.d/
 
 for bin in cfssl cfssl-certinfo cfssljson
 do
@@ -78,3 +78,31 @@ retval=$?
 if [ $retval -eq 1 ]; then
   nomad -autocomplete-install
 fi
+
+echo "Starting consul"
+
+cd $HOME
+
+# Form Consul Cluster
+ps -C consul
+retval=$?
+if [ $retval -eq 0 ]; then
+  sudo killall consul
+fi
+touch $HOME/consul.log
+sudo chmod 660 $HOME/consul.log
+sudo cp /vagrant/consul-config/consul-server-east.hcl /etc/consul.d/consul-server-east.hcl
+sudo nohup consul agent --config-file /etc/consul.d/consul-server-east.hcl &>$HOME/consul.log &
+
+echo "Starting nomad"
+
+# Form Nomad Cluster
+ps -C nomad
+retval=$?
+if [ $retval -eq 0 ]; then
+  sudo killall nomad
+fi
+touch $HOME/nomad.log
+sudo chmod 660 $HOME/nomad.log
+sudo cp /vagrant/nomad-config/nomad-server-east.hcl /etc/nomad.d/nomad-server-east.hcl
+sudo nohup nomad agent -config /etc/nomad.d/nomad-server-east.hcl &>$HOME/nomad.log &
